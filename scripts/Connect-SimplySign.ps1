@@ -8,8 +8,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'Totp.ps1')
 
-$email = "$env:CODESIGN_EMAIL".Trim()
-$otpUri = "$env:CODESIGN_OTPAUTH".Trim()
+$trim = [char[]]@([char]0xFEFF, ' ', "`t", "`r", "`n", '"', "'")
+$email = "$env:CODESIGN_EMAIL".Trim($trim)
+$otpUri = "$env:CODESIGN_OTPAUTH".Trim($trim)
 $expected = ("$env:CODESIGN_THUMBPRINT_EXPECTED" -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
 $exe = if ($env:CODESIGN_SIMPLYSIGN_EXE) { $env:CODESIGN_SIMPLYSIGN_EXE } else { Join-Path $env:ProgramFiles 'Certum\SimplySign Desktop\SimplySignDesktop.exe' }
 

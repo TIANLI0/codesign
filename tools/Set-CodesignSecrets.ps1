@@ -25,14 +25,29 @@ if ($OtpAuthFile) {
 foreach ($repo in $Repository) {
     Write-Host "== $repo"
     # Environment restricted to custom branch/tag policies.
-    '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' |
-        gh api -X PUT "repos/$repo/environments/codesign" --input - | Out-Null
-    $existing = @(gh api "repos/$repo/environments/codesign/deployment-branch-policies" --jq '.branch_policies[] | .type + ":" + .name')
+    $json = [IO.Path]::GetTempFileName()
+    [IO.File]::WriteAllText($json, '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}')
+    gh api -X PUT "repos/$repo/environments/codesign" --input $json | Out-Null
+    Remove-Item $json
+    if ($LASTEXITCODE) { throw "Could not create the codesign environment in $repo." }
+    $existing = @((gh api "repos/$repo/environments/codesign/deployment-branch-policies" | ConvertFrom-Json).branch_policies |
+            ForEach-Object { "$($_.type):$($_.name)" })
     foreach ($b in $Branches) { if ("branch:$b" -notin $existing) { gh api -X POST "repos/$repo/environments/codesign/deployment-branch-policies" -f name=$b -f type=branch | Out-Null } }
     foreach ($t in $Tags) { if ("tag:$t" -notin $existing) { gh api -X POST "repos/$repo/environments/codesign/deployment-branch-policies" -f name=$t -f type=tag | Out-Null } }
 
-    if ($Email) { $Email | gh secret set CERTUM_EMAIL --env codesign --repo $repo }
-    if ($otp) { $otp | gh secret set CERTUM_OTPAUTH --env codesign --repo $repo }
+    # Secrets through a short-lived dotenv file (UTF-8 without BOM): Windows PowerShell's pipe to a native program
+    # can add a BOM or re-encode, which would silently corrupt the value.
+    $lines = @()
+    if ($Email) { $lines += "CERTUM_EMAIL='$($Email.Trim())'" }
+    if ($otp) { $lines += "CERTUM_OTPAUTH='$otp'" }
+    if ($lines) {
+        $envFile = [IO.Path]::GetTempFileName()
+        try {
+            [IO.File]::WriteAllText($envFile, ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+            gh secret set --env codesign --repo $repo --env-file $envFile
+            if ($LASTEXITCODE) { throw "gh secret set failed for $repo." }
+        } finally { Remove-Item -LiteralPath $envFile -Force }
+    }
     if ($Thumbprint) { gh variable set CERTUM_THUMBPRINT --env codesign --repo $repo --body ($Thumbprint -replace '\s', '').ToUpperInvariant() }
     gh secret list --env codesign --repo $repo
 }
