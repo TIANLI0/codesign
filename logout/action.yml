@@ -1,0 +1,17 @@
+name: Certum SimplySign logout
+description: 'Ends the SimplySign cloud session. Use with `if: always()` as the last step of a job that ran TIANLI0/codesign.'
+
+runs:
+  using: composite
+  steps:
+    - name: Close SimplySign session
+      shell: pwsh
+      run: |
+        $exe = $env:CODESIGN_SIMPLYSIGN_EXE
+        if ($exe -and (Test-Path -LiteralPath $exe)) {
+          $p = Start-Process -FilePath $exe -ArgumentList '/close' -PassThru -ErrorAction SilentlyContinue
+          if ($p) { [void]$p.WaitForExit(15000) }
+          Start-Sleep -Seconds 3
+          Get-Process SimplySignDesktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Write-Host 'SimplySign session closed.'
+        } else { Write-Host 'SimplySign was not started in this job.' }

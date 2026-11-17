@@ -1,0 +1,25 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TOTP tests (pwsh)
+        shell: pwsh
+        run: ./tests/Totp.Tests.ps1
+      - name: TOTP tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./tests/Totp.Tests.ps1
+      - name: Script syntax
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem -Recurse -Include *.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Host "::error file=$($f.Name)::$_" }; exit 1 }
+          }

@@ -1,0 +1,40 @@
+name: Certum SimplySign login
+description: Installs SimplySign Desktop on a GitHub-hosted Windows runner, signs in with the account's TOTP and makes the Certum code-signing certificate available to signtool.
+author: TIANLI0
+branding: { icon: lock, color: green }
+
+inputs:
+  email:
+    description: SimplySign account e-mail (secret CERTUM_EMAIL).
+    required: true
+  otpauth:
+    description: The complete otpauth://totp/... URI from the SimplySign activation QR code (secret CERTUM_OTPAUTH).
+    required: true
+  thumbprint:
+    description: Expected SHA-1 thumbprint of the certificate (variable CERTUM_THUMBPRINT). Empty = the only Certum code-signing certificate of the account.
+    required: false
+    default: ''
+
+outputs:
+  thumbprint:
+    description: Thumbprint of the certificate now usable with `signtool /sha1`.
+    value: ${{ steps.login.outputs.thumbprint }}
+
+# After this action the job has:
+#   CODESIGN_THUMBPRINT, CODESIGN_SIGNTOOL, CODESIGN_TIMESTAMP_URL  for signtool or `fluentsetup build --sign`
+#   CODESIGN_SIGN  path of Sign-Files.ps1:  & $env:CODESIGN_SIGN -Root <dir> -Path <patterns> [-Description <name>]
+# Finish the job with TIANLI0/codesign/logout@v1 (if: always()).
+runs:
+  using: composite
+  steps:
+    - name: Install SimplySign Desktop
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/scripts/Install-SimplySign.ps1"'
+    - name: Sign in to SimplySign
+      id: login
+      shell: pwsh
+      env:
+        CODESIGN_EMAIL: ${{ inputs.email }}
+        CODESIGN_OTPAUTH: ${{ inputs.otpauth }}
+        CODESIGN_THUMBPRINT_EXPECTED: ${{ inputs.thumbprint }}
+      run: '& "$env:GITHUB_ACTION_PATH/scripts/Connect-SimplySign.ps1"'

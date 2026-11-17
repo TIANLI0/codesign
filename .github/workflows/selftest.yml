@@ -1,0 +1,48 @@
+# Live end-to-end check of the signing chain: login, sign a throw-away exe, verify signer + timestamp, logout.
+# Run it after setting up or rotating the secrets, and before the certificate renewal date. Publishes nothing.
+name: Signing self-test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: codesign-selftest
+jobs:
+  selftest:
+    runs-on: windows-latest
+    environment: codesign
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login
+        id: login
+        uses: ./
+        with:
+          email: ${{ secrets.CERTUM_EMAIL }}
+          otpauth: ${{ secrets.CERTUM_OTPAUTH }}
+          thumbprint: ${{ vars.CERTUM_THUMBPRINT }}
+      - name: Build a throw-away exe
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force selftest | Out-Null
+          Add-Type -OutputType ConsoleApplication -OutputAssembly selftest\hello.exe -TypeDefinition 'public static class P { public static void Main() { System.Console.WriteLine("signed"); } }'
+          Copy-Item "$env:WINDIR\System32\notepad.exe" selftest\   # Microsoft-signed: must be skipped, not re-signed
+      - name: Sign
+        uses: ./sign
+        with:
+          root: selftest
+          files: |
+            hello.exe
+            notepad.exe
+          description: codesign self-test
+      - name: Check
+        shell: pwsh
+        run: |
+          $s = Get-AuthenticodeSignature selftest\hello.exe
+          if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Thumbprint -ne '${{ steps.login.outputs.thumbprint }}' -or -not $s.TimeStamperCertificate) { throw "hello.exe: $($s.Status)" }
+          $n = Get-AuthenticodeSignature selftest\notepad.exe
+          if ($n.SignerCertificate.Subject -notmatch 'Microsoft') { throw 'notepad.exe was re-signed' }
+          & selftest\hello.exe
+          Write-Host "Signer: $($s.SignerCertificate.Subject)"
+          Write-Host "Timestamp: $($s.TimeStamperCertificate.Subject)"
+      - name: Logout
+        if: always()
+        uses: ./logout
