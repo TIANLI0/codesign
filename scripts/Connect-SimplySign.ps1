@@ -127,8 +127,8 @@ if (-not $cert) {
 
 if (-not $cert) { throw 'SimplySign login failed: no Certum code-signing certificate appeared in CurrentUser\My. Check the e-mail/otpauth secrets and that the certificate is active.' }
 
-Write-Host "Connected. Certificate: $($cert.Subject)"
-Write-Host "  issuer:     $($cert.Issuer)"
+# The subject (the certificate holder's name) is not printed: workflow logs of public repositories are public.
+Write-Host "Connected. Certificate issued by: $($cert.Issuer)"
 Write-Host "  thumbprint: $($cert.Thumbprint)"
 Write-Host "  valid to:   $($cert.NotAfter.ToString('yyyy-MM-dd'))"
 if ($cert.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "::warning::The code-signing certificate expires on $($cert.NotAfter.ToString('yyyy-MM-dd')). Renew it at Certum." }

@@ -41,7 +41,7 @@ jobs:
           $n = Get-AuthenticodeSignature selftest\notepad.exe
           if ($n.SignerCertificate.Subject -notmatch 'Microsoft') { throw 'notepad.exe was re-signed' }
           & selftest\hello.exe
-          Write-Host "Signer: $($s.SignerCertificate.Subject)"
+          Write-Host "Signer thumbprint: $($s.SignerCertificate.Thumbprint)"
           Write-Host "Timestamp: $($s.TimeStamperCertificate.Subject)"
       - name: Logout
         if: always()
